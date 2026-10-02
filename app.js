@@ -1240,3 +1240,27 @@ function setupHeatmapTooltipsV16(host){
  const hide=()=>{tip.hidden=true},move=(event,cell)=>{const gap=14;tip.style.setProperty('--heat-color',getComputedStyle(cell).getPropertyValue('--heat-color'));let x=event.clientX+gap,y=event.clientY+gap;const rect=tip.getBoundingClientRect();if(x+rect.width>window.innerWidth-8)x=event.clientX-rect.width-gap;if(y+rect.height>window.innerHeight-8)y=event.clientY-rect.height-gap;tip.style.left=x+'px';tip.style.top=y+'px'};
  host.querySelector('.heatmap-treemap')?.addEventListener('pointerleave',hide);host.querySelectorAll('.heatmap-cell').forEach(cell=>{const source=cell.querySelector('.heatmap-tooltip');cell.addEventListener('pointerenter',event=>{tip.innerHTML=source.innerHTML;tip.hidden=false;move(event,cell)});cell.addEventListener('pointermove',event=>move(event,cell));cell.addEventListener('pointerleave',hide)});
 }
+
+// Version 109: keep the nine annual-growth cards in three logical rows, with a blank fourth slot on desktop.
+function annualGrowthMarkupV106(snapshot){
+ const cards=snapshots(),current=compute(snapshot),baselineMonth=annualComparisonBaseMonthV101(snapshot.month),baselineSnapshot=cards.find(item=>item.month===baselineMonth),baseline=baselineSnapshot?compute(baselineSnapshot):null;
+ const diff=(a,b)=>b===null?'—':money(a-b),stockPosition=value=>value.stocks+value.bonds+value.brokerCash,netStockPosition=value=>stockPosition(value)-value.debt,currentStock=stockPosition(current),currentNetStock=netStockPosition(current),investment=num(snapshot.totalInvestment),baselineStockGrowth=baseline?stockPosition(baseline)-num(baselineSnapshot.totalInvestment):null,stockAnnualBase=baselineStockGrowth===null?null:investment+baselineStockGrowth;
+ const rows=[
+  [
+   metric('總資產年成長',diff(current.assets,baseline?.assets??null),baseline?`較 ${monthLabel(baselineMonth)}`:`無 ${monthLabel(baselineMonth)} 基準資料`),
+   metric('扣除質押後總資產成長',diff(current.net,baseline?.net??null),baseline?`較 ${monthLabel(baselineMonth)} 淨資產`:`無 ${monthLabel(baselineMonth)} 基準資料`),
+   metric('年度績效',baseline?.net?pct((current.net-baseline.net)/baseline.net):'—',baseline?`較 ${monthLabel(baselineMonth)} 淨資產`:`無 ${monthLabel(baselineMonth)} 基準資料`)
+  ],
+  [
+   metric('股票部位年成長',diff(currentStock,stockAnnualBase),baseline?`基準：年末投入＋${monthLabel(baselineMonth)}總成長`:`無 ${monthLabel(baselineMonth)} 基準資料`),
+   metric('扣除質押後股票部位成長',diff(currentNetStock,stockAnnualBase),baseline?'扣債務後部位；基準同上':`無 ${monthLabel(baselineMonth)} 基準資料`),
+   metric('股票部位年度績效',stockAnnualBase?pct((currentNetStock-stockAnnualBase)/stockAnnualBase):'—',baseline?'扣債務後部位相對年度基準':`無 ${monthLabel(baselineMonth)} 基準資料`)
+  ],
+  [
+   metric('股票部位總成長',money(currentStock-investment),'較年末總投入金額'),
+   metric('扣除質押後股票部位總成長',money(currentNetStock-investment),'股票部位−債務−年末總投入'),
+   metric('股票部位總績效',investment?pct((currentNetStock-investment)/investment):'—','扣債務股票部位相對年末總投入金額')
+  ]
+ ];
+ return rows.map(row=>`<div class="annual-growth-row">${row.join('')}<span class="annual-growth-placeholder" aria-hidden="true"></span></div>`).join('');
+}

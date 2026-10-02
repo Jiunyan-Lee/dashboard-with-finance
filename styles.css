@@ -170,7 +170,12 @@
 .dashboard-series-heading h2{font:600 24px Outfit,"Noto Sans TC";margin:0 0 6px}
 .dashboard-series-heading+.section-title{margin-top:0}
 @media(max-width:620px){.dashboard-series-heading{margin-top:38px}.dashboard-series-heading h2{font-size:22px}}
-/* Version 106: annual asset-change metrics use an explicit three-by-three layout. */
-#annual-records .annual-growth-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-
-@media(max-width:620px){#annual-records .annual-growth-grid{grid-template-columns:1fr}}
+/* Version 109: three logical rows of three cards use a four-slot desktop grid. */
+#annual-records .annual-growth-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:13px}
+#annual-records .annual-growth-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+#annual-records .annual-growth-placeholder{display:block;min-width:0}
+@media(max-width:960px){
+ #annual-records .annual-growth-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #annual-records .annual-growth-placeholder{display:none}
+}
+@media(max-width:620px){#annual-records .annual-growth-row{grid-template-columns:1fr}}
