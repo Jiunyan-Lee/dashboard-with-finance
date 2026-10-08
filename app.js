@@ -1264,3 +1264,167 @@ function annualGrowthMarkupV106(snapshot){
  ];
  return rows.map(row=>`<div class="annual-growth-row">${row.join('')}<span class="annual-growth-placeholder" aria-hidden="true"></span></div>`).join('');
 }
+
+// Version 110: date-sorted trades and pointer/keyboard reordering of monthly asset rows.
+function sortedTradesV110(){
+ const direction=state.settings?.tradeDateSort==='asc'?1:-1;
+ return state.trades.map((trade,index)=>({trade,index})).sort((a,b)=>{
+  if(!a.trade.date||!b.trade.date)return a.trade.date?1:b.trade.date?-1:a.index-b.index;
+  return direction*a.trade.date.localeCompare(b.trade.date)||a.index-b.index;
+ }).map(item=>item.trade);
+}
+function updateTradeSortV110(){
+ const button=document.getElementById('tradeDateSortBtn');if(!button)return;
+ const ascending=state.settings?.tradeDateSort==='asc';
+ button.querySelector('.sort-triangle').textContent=ascending?'▲':'▼';
+ button.closest('th').setAttribute('aria-sort',ascending?'ascending':'descending');
+ button.title=ascending?'目前：最舊到最新；點選改為最新到最舊':'目前：最新到最舊；點選改為最舊到最新';
+ button.setAttribute('aria-label','賣出日期，'+button.title);
+}
+function renderPerformance(){
+ renderPerformanceSummaryV8();updateTradeSortV110();
+ const host=document.getElementById('tradeRows');host.innerHTML='';
+ sortedTradesV110().forEach(trade=>{
+  const tr=document.createElement('tr');
+  tr.innerHTML='<td><input data-field="date" type="date"></td><td><input data-field="name" placeholder="例如：台積電"></td><td><input data-field="cost" class="money-input" inputmode="numeric" placeholder="0"></td><td><input data-field="proceeds" class="money-input" inputmode="numeric" placeholder="0"></td><td class="pnl"></td><td class="return-cell"></td><td><button type="button" class="remove" aria-label="刪除賣出紀錄">×</button></td>';
+  const refresh=()=>{
+   const pnl=num(trade.proceeds)-num(trade.cost),rate=tradeRateV8(trade),pnlCell=tr.querySelector('.pnl'),rateCell=tr.querySelector('.return-cell');
+   pnlCell.textContent=money(pnl);pnlCell.className=`pnl ${tradeClassV8(pnl)}`;
+   rateCell.textContent=pct(rate);rateCell.className=`return-cell ${tradeClassV8(pnl)}`;
+  };
+  tr.querySelectorAll('[data-field]').forEach(input=>{
+   const field=input.dataset.field;input.value=trade[field]||'';
+   if(field==='cost'||field==='proceeds')bindMoney(input,value=>{trade[field]=value;refresh();renderPerformanceSummaryV8();renderAnnualTradeStatsV8();save();});
+   else input.addEventListener('input',event=>{trade[field]=event.target.value;renderAnnualTradeStatsV8();save();});
+   if(field==='date')input.addEventListener('change',()=>renderPerformance());
+  });
+  refresh();tr.querySelector('.remove').addEventListener('click',()=>{
+   const index=state.trades.indexOf(trade);if(index<0)return;
+   state.trades.splice(index,1);save();renderPerformance();
+  });host.append(tr);
+ });
+ renderAnnualTradeStatsV8();syncMoneyInputMaskV29();
+}
+function moveAssetRowV110(kind,row,offset){
+ const items=state.current[kind],from=items.indexOf(row),to=from+offset;
+ if(from<0||to<0||to>=items.length)return;
+ items.splice(to,0,items.splice(from,1)[0]);save();renderRows(kind);
+ getContainer(kind).children[to]?.querySelector('.row-drag-handle')?.focus();
+}
+// Version 112: animate neighbouring rows into place and briefly highlight the dropped row.
+function assetRowBoundsV112(row){
+ const rect=row.getBoundingClientRect(),transform=getComputedStyle(row).transform;
+ const shift=transform==='none'?0:new DOMMatrixReadOnly(transform).m42;
+ return{top:rect.top-shift,height:rect.height};
+}
+function animateAssetReorderV112(host,dragged,reorder){
+ const rows=[...host.children],positions=new Map(rows.map(row=>[row,row.getBoundingClientRect().top]));
+ rows.forEach(row=>{row.assetShiftAnimationV112?.cancel();row.assetShiftAnimationV112=null;});
+ reorder();
+ if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ rows.forEach(row=>{
+  if(row===dragged)return;
+  const delta=positions.get(row)-row.getBoundingClientRect().top;
+  if(Math.abs(delta)<.5)return;
+  row.assetShiftAnimationV112=row.animate([{transform:`translateY(${delta}px)`},{transform:'translateY(0)'}],{duration:180,easing:'cubic-bezier(.2,.7,.3,1)'});
+ });
+}
+function highlightAssetDropV112(host,row){
+ const dropped=[...host.children].find(element=>element.assetRowV110===row);
+ if(!dropped)return;
+ dropped.classList.add('is-just-dropped');
+ setTimeout(()=>dropped.classList.remove('is-just-dropped'),300);
+}
+function bindAssetDragV110(handle,element,host,kind){
+ handle.addEventListener('keydown',event=>{
+  if(event.key!=='ArrowUp'&&event.key!=='ArrowDown')return;
+  event.preventDefault();moveAssetRowV110(kind,element.assetRowV110,event.key==='ArrowUp'?-1:1);
+ });
+ handle.addEventListener('pointerdown',event=>{
+  if(!event.isPrimary||event.button!==0||host.children.length<2)return;
+  event.preventDefault();handle.setPointerCapture(event.pointerId);
+  let lastY=event.clientY,lastX=event.clientX,moved=false,frame=0;
+  const startY=lastY,pointerId=event.pointerId,grabOffset=lastY-element.getBoundingClientRect().top;
+  // Version 113: keep the grabbed row under the pointer while its layout slot moves.
+  const followPointer=()=>{
+   if(!moved)return;
+   const layoutTop=assetRowBoundsV112(element).top;
+   element.style.transform=`translateY(${lastY-grabOffset-layoutTop}px)`;
+  };
+  const place=()=>{
+   if(!moved)return;
+   const hostBounds=host.getBoundingClientRect(),rows=[...host.children];
+   if(lastX<hostBounds.left||lastX>hostBounds.right)return;
+   const target=rows.find(row=>{const bounds=assetRowBoundsV112(row);return lastY>=bounds.top&&lastY<=bounds.top+bounds.height;});
+   if(!target||target===element)return;
+   const bounds=assetRowBoundsV112(target),from=rows.indexOf(element),to=rows.indexOf(target);
+   if(from<to&&lastY>bounds.top+bounds.height/2)animateAssetReorderV112(host,element,()=>host.insertBefore(element,target.nextSibling));
+   else if(from>to&&lastY<bounds.top+bounds.height/2)animateAssetReorderV112(host,element,()=>host.insertBefore(element,target));
+   handle.setPointerCapture(pointerId);
+  };
+  const scroll=()=>{
+   if(moved){
+    const top=(document.querySelector('.topbar')?.getBoundingClientRect().bottom||0)+40;
+    const step=lastY<top?-10:lastY>window.innerHeight-60?10:0;
+    if(step){window.scrollBy(0,step);place();followPointer();}
+   }
+   frame=requestAnimationFrame(scroll);
+  };
+  const move=next=>{
+   if(next.pointerId!==pointerId)return;
+   lastX=next.clientX;lastY=next.clientY;
+   if(!moved&&Math.abs(lastY-startY)>=4){moved=true;element.classList.add('is-dragging');handle.setAttribute('aria-pressed','true');}
+   place();followPointer();
+  };
+  const finish=next=>{
+   if(next.pointerId!==pointerId)return;
+   cancelAnimationFrame(frame);handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',finish);handle.removeEventListener('pointercancel',cancel);handle.removeEventListener('lostpointercapture',cancel);
+   if(handle.hasPointerCapture(pointerId))handle.releasePointerCapture(pointerId);
+   if(moved&&next.type==='pointerup'){state.current[kind]=[...host.children].map(child=>child.assetRowV110);save();}
+   element.style.removeProperty('transform');element.classList.remove('is-dragging');handle.setAttribute('aria-pressed','false');
+   if(moved){
+    renderRows(kind);
+    if(next.type==='pointerup')highlightAssetDropV112(host,element.assetRowV110);
+   }
+  };
+  const cancel=next=>finish(next);
+  handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',finish);handle.addEventListener('pointercancel',cancel);handle.addEventListener('lostpointercapture',cancel);
+  frame=requestAnimationFrame(scroll);
+ });
+}
+// Version 111: prepend a single-column drag handle; keep deletion in the rightmost cell.
+function renderRows(kind){
+ const host=getContainer(kind);host.innerHTML='';
+ state.current[kind].forEach(row=>{
+  let element;
+  if(kind==='banks'){
+   element=document.createElement('div');element.className='data-row bank';
+   element.innerHTML='<input data-field="name" placeholder="名稱"><input data-field="amount" class="money-input" inputmode="numeric" placeholder="0"><label class="initial-asset-check" aria-label="初始資產"><input data-field="initialAsset" type="checkbox"></label><button type="button" class="remove">×</button>';
+  }else element=document.getElementById(kind==='holdings'?'holdingTemplate':'simpleTemplate').content.firstElementChild.cloneNode(true);
+  element.assetRowV110=row;
+  element.querySelectorAll('[data-field]').forEach(input=>{
+   const field=input.dataset.field;
+   if(field==='initialAsset'){
+    input.checked=Boolean(row.initialAsset);input.addEventListener('change',()=>{row.initialAsset=input.checked;save();});
+   }else{
+    input.value=row[field]||'';
+    const update=value=>{row[field]=value;save();renderDashboard();};
+    if(field==='amount')bindMoney(input,update);
+    else input.addEventListener('input',()=>update(input.value));
+   }
+  });
+  const remove=element.querySelector('.remove'),actions=document.createElement('div'),handle=document.createElement('button');
+  actions.className='row-actions';handle.type='button';handle.className='row-drag-handle';handle.textContent='⋮';handle.title='拖曳調整順序；亦可用上／下方向鍵';handle.setAttribute('aria-label','拖曳調整此列順序，或使用上／下方向鍵');handle.setAttribute('aria-pressed','false');
+  element.replaceChild(actions,remove);actions.append(remove);element.prepend(handle);remove.type='button';remove.setAttribute('aria-label','移除此列');
+  remove.addEventListener('click',()=>{
+   const index=state.current[kind].indexOf(row);if(index<0)return;
+   state.current[kind].splice(index,1);save();renderRows(kind);renderDashboard();
+  });
+  host.append(element);bindAssetDragV110(handle,element,host,kind);
+ });
+ syncMoneyInputMaskV29();
+}
+document.getElementById('tradeDateSortBtn')?.addEventListener('click',()=>{
+ state.settings={...(state.settings||{}),tradeDateSort:state.settings?.tradeDateSort==='asc'?'desc':'asc'};
+ save();renderPerformance();
+});

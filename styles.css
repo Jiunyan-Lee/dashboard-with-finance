@@ -179,3 +179,43 @@
  #annual-records .annual-growth-placeholder{display:none}
 }
 @media(max-width:620px){#annual-records .annual-growth-row{grid-template-columns:1fr}}
+
+/* Version 110: compact row drag grips and an accessible sale-date sort button. */
+.trade-date-sort{display:inline-flex;align-items:center;gap:6px;padding:6px 0;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
+.sort-triangle{color:var(--green);font-size:10px}
+.trade-date-sort:focus-visible,.row-drag-handle:focus-visible{outline:2px solid #abd6c1;outline-offset:2px;border-radius:4px}
+#monthly .bank{grid-template-columns:minmax(0,1fr) minmax(90px,.75fr) 54px 60px}
+#monthly .simple{grid-template-columns:minmax(0,1fr) minmax(90px,.75fr) 60px}
+#monthly .holding{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 100px minmax(100px,.75fr) 60px}
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0}
+.row-actions .remove{width:28px;padding:0}
+.row-drag-handle{display:flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;min-height:36px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--muted);font-size:23px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.row-drag-handle:hover{background:var(--soft);color:var(--green)}
+.data-row.is-dragging{background:var(--soft);outline:2px solid #abd6c1;border-radius:6px}
+.data-row.is-dragging .row-drag-handle{cursor:grabbing}
+@media(max-width:620px){
+ #monthly .holdings-scroll .holding{min-width:642px;grid-template-columns:145px 165px 105px 135px 60px}
+ #monthly .holdings-scroll .holding .row-actions{grid-column:5;grid-row:auto;position:sticky;right:0;z-index:2;background:var(--white);min-height:42px;box-shadow:-7px 0 8px -8px rgba(20,37,30,.42)}
+ #monthly .holdings-scroll .holding .row-actions .remove{position:static;min-height:0;box-shadow:none;background:transparent}
+ .row-drag-handle{min-height:44px}
+}
+
+/* Version 111: single-column, half-width drag handle on the left of every monthly row. */
+#monthly .bank{grid-template-columns:15px minmax(0,1fr) minmax(90px,.75fr) 54px 28px}
+#monthly .simple{grid-template-columns:15px minmax(0,1fr) minmax(90px,.75fr) 28px}
+#monthly .holding{grid-template-columns:15px minmax(0,1fr) minmax(0,1fr) 100px minmax(100px,.75fr) 28px}
+#monthly .row-drag-handle{width:15px;flex-basis:15px;grid-column:1;grid-row:auto}
+#monthly .row-head.bank span:nth-child(3){text-align:left}
+#monthly .row-head.bank span:nth-child(4){text-align:center}
+@media(max-width:620px){
+ #monthly .holdings-scroll .holding{min-width:633px;grid-template-columns:15px 145px 165px 105px 135px 28px}
+ #monthly .holdings-scroll .holding .row-drag-handle{position:sticky;left:0;z-index:2;background:var(--white)}
+ #monthly .holdings-scroll .holding .row-actions{grid-column:6}
+ #monthly .holdings-scroll .row-head.holding span:nth-child(3),#monthly .holdings-scroll .row-head.holding span:nth-child(4),#monthly .holdings-scroll .row-head.holding span:nth-child(5){display:block}
+}
+
+/* Version 112: short drop confirmation; row movement uses the Web Animations API. */
+#monthly .data-row.is-just-dropped{background:var(--soft);border-radius:6px;outline:1px solid #abd6c1}
+
+/* Version 113: the grabbed row follows the pointer without transition lag. */
+#monthly .data-row.is-dragging{position:relative;z-index:3;transition:none;will-change:transform;box-shadow:0 4px 12px rgba(20,37,30,.15)}
